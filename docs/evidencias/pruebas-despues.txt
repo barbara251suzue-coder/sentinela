@@ -1,0 +1,20 @@
+RESULTADO DE PRUEBAS — CÓDIGO CORREGIDO (DESPUÉS)
+Fecha: ejecución local con Jest · 17 aprobadas / 0 fallidas de 17
+
+[APROBADO] CP-01 RF-01: registra una usuaria y almacena la contraseña cifrada
+[APROBADO] CP-02 RF-01: rechaza un email duplicado con 409
+[APROBADO] CP-03 RF-02: inicia sesión y emite un JWT con expiración de dos horas
+[APROBADO] CP-04 RF-02: responde Credenciales inválidas ante una clave incorrecta
+[APROBADO] CP-05 RF-03: rechaza listar reportes sin token
+[APROBADO] CP-06 RF-04: rechaza una latitud fuera de rango
+[APROBADO] CP-07 RF-04: rechaza una descripción vacía
+[APROBADO] CP-08 RF-04: rechaza una descripción de más de 400 caracteres
+[APROBADO] CP-09 RF-05: persiste usuario_id NULL y no expone identidad en reporte anónimo
+[APROBADO] CP-10 RF-06: filtra el listado por tipo y rango de fechas
+[APROBADO] CP-11 RF-09: asigna el nivel correspondiente a cada tipo de reporte
+[APROBADO] CP-12 RNF-03 (D-01): rechaza un JWT firmado con un algoritmo distinto a HS256
+[APROBADO] CP-13 RF-02 (D-02): rechaza con 401 el token de una cuenta que ya no existe
+[APROBADO] CP-14 RF-04 (D-03): limita la publicación a 10 reportes cada 10 minutos por usuaria
+[APROBADO] CP-15 RF-05 (D-04): guarda la ubicación aproximada (3 decimales, ~100 m)
+[APROBADO] CP-16 RF-03 (D-05): rechaza ubicaciones fuera de Valdivia
+[APROBADO] CP-17 RNF-01 (D-06): el listado devuelve como máximo 500 reportes

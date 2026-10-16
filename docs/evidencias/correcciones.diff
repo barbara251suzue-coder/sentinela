@@ -1,0 +1,230 @@
+diff --git a/public/app.js b/public/app.js
+index 712318e..afb8021 100644
+--- a/public/app.js
++++ b/public/app.js
+@@ -72,10 +72,11 @@ function describeError(status, data) {
+     const fieldNames = { email: 'Correo', 'contraseña': 'Contraseña', nombre: 'Nombre', descripcion: 'Descripción', lat: 'Ubicación', lng: 'Ubicación', tipo: 'Tipo' };
+     if (status === 400 && Array.isArray(data.detalles) && data.detalles.length) {
+         const first = data.detalles[0];
++        if (/Valdivia/.test(first.mensaje)) return 'Elige una ubicación dentro de la comuna de Valdivia.';
+         return `${fieldNames[first.campo] || 'Dato'} no válido: revisa ese campo.`;
+     }
+     if (status === 409) return 'Ya existe una cuenta con ese correo.';
+-    if (status === 429) return 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.';
++    if (status === 429) return data.error || 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.';
+     return data.error || 'Ocurrió un error inesperado. Inténtalo de nuevo.';
+ }
+ 
+diff --git a/src/config.js b/src/config.js
+new file mode 100644
+index 0000000..39534c6
+--- /dev/null
++++ b/src/config.js
+@@ -0,0 +1,18 @@
++import 'dotenv/config';
++
++// D-07: una clave corta (por ejemplo "123") permite adivinar la firma de los tokens por fuerza bruta.
++// HS256 usa una clave de 256 bits, así que se exigen al menos 32 caracteres.
++export const LARGO_MINIMO_SECRETO = 32;
++
++// D-01: se fija el algoritmo para que la API no acepte tokens firmados de otra forma.
++export const ALGORITMO_JWT = 'HS256';
++
++export function obtenerSecretoJwt() {
++  const secreto = process.env.JWT_SECRET;
++  if (!secreto || secreto.length < LARGO_MINIMO_SECRETO) {
++    throw new Error(
++      `JWT_SECRET debe tener al menos ${LARGO_MINIMO_SECRETO} caracteres (configúralo en el archivo .env)`
++    );
++  }
++  return secreto;
++}
+diff --git a/src/middleware/auth.js b/src/middleware/auth.js
+index 8dd651d..d82b8f7 100644
+--- a/src/middleware/auth.js
++++ b/src/middleware/auth.js
+@@ -1,13 +1,15 @@
+ import jwt from 'jsonwebtoken';
+ import { z } from 'zod';
++import { pool } from '../db.js';
+ import { ErrorHttp } from '../errors.js';
++import { ALGORITMO_JWT, obtenerSecretoJwt } from '../config.js';
+ 
+ const encabezadoSchema = z.string().regex(/^Bearer\s+\S+$/i);
+ const tokenSchema = z.object({
+   sub: z.string().regex(/^\d+$/),
+ });
+ 
+-export function requiereAutenticacion(req, res, next) {
++export async function requiereAutenticacion(req, res, next) {
+   const resultado = encabezadoSchema.safeParse(req.get('authorization'));
+   if (!resultado.success) {
+     return next(new ErrorHttp(401, 'Se requiere autenticación'));
+@@ -15,23 +17,30 @@ export function requiereAutenticacion(req, res, next) {
+ 
+   const token = resultado.data.replace(/^Bearer\s+/i, '');
+ 
++  let claims;
+   try {
+-    const secreto = process.env.JWT_SECRET;
+-    if (!secreto) {
+-      throw new Error('JWT_SECRET no está configurado');
++    // D-01: solo se aceptan tokens firmados con HS256.
++    claims = tokenSchema.safeParse(jwt.verify(token, obtenerSecretoJwt(), { algorithms: [ALGORITMO_JWT] }));
++  } catch (error) {
++    if (error instanceof jwt.JsonWebTokenError) {
++      return next(new ErrorHttp(401, 'Token inválido o expirado'));
+     }
++    return next(error);
++  }
++  if (!claims.success) {
++    return next(new ErrorHttp(401, 'Token inválido'));
++  }
+ 
+-    const claims = tokenSchema.safeParse(jwt.verify(token, secreto));
+-    if (!claims.success) {
+-      return next(new ErrorHttp(401, 'Token inválido'));
++  try {
++    // D-02: un token válido de una cuenta eliminada ya no da acceso (antes terminaba en error 500).
++    const usuario = await pool.query('SELECT id FROM usuarios WHERE id = $1', [claims.data.sub]);
++    if (usuario.rowCount === 0) {
++      return next(new ErrorHttp(401, 'La cuenta ya no existe'));
+     }
+-
+-    req.usuarioId = Number(claims.data.sub);
+-    return next();
+   } catch (error) {
+-    if (error instanceof Error && error.message === 'JWT_SECRET no está configurado') {
+-      return next(error);
+-    }
+-    return next(new ErrorHttp(401, 'Token inválido o expirado'));
++    return next(error);
+   }
++
++  req.usuarioId = Number(claims.data.sub);
++  return next();
+ }
+diff --git a/src/routes/auth.js b/src/routes/auth.js
+index 4250501..e29e0ce 100644
+--- a/src/routes/auth.js
++++ b/src/routes/auth.js
+@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
+ import { z } from 'zod';
+ import { pool } from '../db.js';
+ import { ErrorHttp } from '../errors.js';
++import { ALGORITMO_JWT, obtenerSecretoJwt } from '../config.js';
+ 
+ const router = Router();
+ const hashParaCredencialInvalida = bcrypt.hash('sentinela-credencial-no-valida', 12);
+@@ -55,12 +56,10 @@ router.post('/login', async (req, res, next) => {
+       throw new ErrorHttp(401, 'Credenciales inválidas');
+     }
+ 
+-    const secreto = process.env.JWT_SECRET;
+-    if (!secreto) {
+-      throw new Error('JWT_SECRET no está configurado');
+-    }
+-
+-    const token = jwt.sign({ sub: String(usuario.id) }, secreto, { expiresIn: '2h' });
++    const token = jwt.sign({ sub: String(usuario.id) }, obtenerSecretoJwt(), {
++      algorithm: ALGORITMO_JWT,
++      expiresIn: '2h',
++    });
+     return res.status(200).json({
+       token,
+       tipo: 'Bearer',
+diff --git a/src/routes/reportes.js b/src/routes/reportes.js
+index f74b92e..7b3ffb5 100644
+--- a/src/routes/reportes.js
++++ b/src/routes/reportes.js
+@@ -1,4 +1,5 @@
+ import { Router } from 'express';
++import rateLimit from 'express-rate-limit';
+ import { z } from 'zod';
+ import { pool } from '../db.js';
+ import { requiereAutenticacion } from '../middleware/auth.js';
+@@ -20,14 +21,42 @@ const filtrosSchema = z.object({
+   { message: 'La fecha desde debe ser anterior o igual a hasta' }
+ );
+ 
++// D-05: el mapa es de Valdivia; se rechazan puntos fuera de la comuna (rectángulo aproximado).
++const LIMITES_VALDIVIA = { latMin: -40.0, latMax: -39.6, lngMin: -73.5, lngMax: -72.9 };
++const fueraDeValdivia = 'La ubicación debe estar dentro de la comuna de Valdivia';
++
++// D-04: se guardan 3 decimales (~100 m) para que un punto exacto no delate el domicilio de quien reporta.
++const aproximar = (valor) => Math.round(valor * 1000) / 1000;
++
++// D-06: tope de reportes por respuesta, para no devolver la tabla completa.
++const MAXIMO_REPORTES = 500;
++
+ const reporteSchema = z.object({
+   tipo: z.enum(tiposIncidente),
+   descripcion: z.string().trim().min(1).max(400),
+-  lat: z.number().finite().min(-90).max(90),
+-  lng: z.number().finite().min(-180).max(180),
++  lat: z.number().finite()
++    .min(LIMITES_VALDIVIA.latMin, fueraDeValdivia)
++    .max(LIMITES_VALDIVIA.latMax, fueraDeValdivia)
++    .transform(aproximar),
++  lng: z.number().finite()
++    .min(LIMITES_VALDIVIA.lngMin, fueraDeValdivia)
++    .max(LIMITES_VALDIVIA.lngMax, fueraDeValdivia)
++    .transform(aproximar),
+   es_anonimo: z.boolean().default(false),
+ }).strict();
+ 
++// D-03: como máximo 10 reportes publicados cada 10 minutos por cuenta (evita inundar el mapa).
++// Solo cuentan las publicaciones exitosas; un formulario con errores no gasta el cupo.
++const limitePublicacion = rateLimit({
++  windowMs: 10 * 60 * 1000,
++  limit: 10,
++  keyGenerator: (req) => `usuario:${req.usuarioId}`,
++  skipFailedRequests: true,
++  standardHeaders: true,
++  legacyHeaders: false,
++  message: { error: 'Publicaste muchos reportes seguidos; espera unos minutos' },
++});
++
+ const nivelPorTipo = {
+   espacio_seguro: 'safe',
+   iluminacion_deficiente: 'care',
+@@ -46,8 +75,9 @@ router.get('/', async (req, res, next) => {
+        WHERE ($1::text IS NULL OR tipo_incidente = $1)
+          AND ($2::timestamptz IS NULL OR fecha_creacion >= $2)
+          AND ($3::timestamptz IS NULL OR fecha_creacion <= $3)
+-       ORDER BY fecha_creacion DESC`,
+-      [filtros.tipo ?? null, filtros.desde ?? null, filtros.hasta ?? null]
++       ORDER BY fecha_creacion DESC
++       LIMIT $4`,
++      [filtros.tipo ?? null, filtros.desde ?? null, filtros.hasta ?? null, MAXIMO_REPORTES]
+     );
+ 
+     const reportes = resultado.rows.map((reporte) => ({
+@@ -60,7 +90,7 @@ router.get('/', async (req, res, next) => {
+   }
+ });
+ 
+-router.post('/', async (req, res, next) => {
++router.post('/', limitePublicacion, async (req, res, next) => {
+   try {
+     const entrada = reporteSchema.parse(req.body);
+     const usuarioId = entrada.es_anonimo ? null : req.usuarioId;
+diff --git a/src/server.js b/src/server.js
+index 5f03457..e24c2ed 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -1,8 +1,12 @@
+ import 'dotenv/config';
+ import app from './app.js';
++import { obtenerSecretoJwt } from './config.js';
+ 
+-if (!process.env.JWT_SECRET) {
+-  throw new Error('No se puede iniciar Sentinela: configura JWT_SECRET en el archivo .env');
++try {
++  obtenerSecretoJwt();
++} catch (error) {
++  console.error(`No se puede iniciar Sentinela: ${error.message}`);
++  process.exit(1);
+ }
+ 
+ const puerto = Number(process.env.PORT || 3000);

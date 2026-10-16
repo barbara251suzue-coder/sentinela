@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f3ed">
+    <title>Sentinela | Mapa colaborativo de seguridad</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+    <div class="app">
+        <header class="topbar">
+            <div class="brand" aria-label="Sentinela, mapa de seguridad de Valdivia">
+                <span class="brand-mark"><i data-lucide="shield-check" aria-hidden="true"></i></span>
+                <span class="brand-name">sentinela</span>
+                <span class="brand-place">Valdivia, Chile</span>
+            </div>
+            <div class="top-actions">
+                <span class="user-chip" id="userChip" hidden><i data-lucide="user-round" aria-hidden="true"></i>
+                    <span id="userName"></span></span>
+                <button class="quiet-button" id="logoutButton" type="button" hidden title="Cerrar sesión"><i
+                        data-lucide="log-out" aria-hidden="true"></i> Salir</button>
+                <button class="quiet-button" id="centerButton" type="button" title="Centrar mapa en Valdivia"><i
+                        data-lucide="locate-fixed" aria-hidden="true"></i> Mi zona</button>
+                <button class="primary-button" id="openReportTop" type="button"><i data-lucide="map-pin-plus"
+                        aria-hidden="true"></i> Reportar</button>
+            </div>
+        </header>
+
+        <main class="layout">
+            <aside class="rail" aria-label="Resumen y filtros del mapa">
+                <section class="intro">
+                    <span class="eyebrow">Seguridad colaborativa</span>
+                    <h1>Muévete con más información.</h1>
+                    <p>Consulta reportes comunitarios y comparte información útil sobre Valdivia.</p>
+                </section>
+
+                <section class="panel" aria-labelledby="filterTitle">
+                    <div class="panel-head">
+                        <h2 class="panel-title" id="filterTitle">Zonas en el mapa</h2>
+                        <span class="count-label" id="reportCount">0 reportes</span>
+                    </div>
+                    <div class="filters" role="group" aria-label="Filtrar zonas por nivel de seguridad">
+                        <button class="filter-button" data-filter="all" aria-pressed="true" type="button"><span
+                                class="filter-dot" style="background:#78827c"></span> Todas las zonas <span
+                                class="filter-count" id="allCount">0</span></button>
+                        <button class="filter-button" data-filter="safe" aria-pressed="false" type="button"><span
+                                class="filter-dot safe"></span> Zona segura <span class="filter-count"
+                                id="safeCount">0</span></button>
+                        <button class="filter-button" data-filter="care" aria-pressed="false" type="button"><span
+                                class="filter-dot care"></span> Precaución <span class="filter-count"
+                                id="careCount">0</span></button>
+                        <button class="filter-button" data-filter="risk" aria-pressed="false" type="button"><span
+                                class="filter-dot risk"></span> Zona de riesgo <span class="filter-count"
+                                id="riskCount">0</span></button>
+                    </div>
+                </section>
+
+                <section class="panel summary" aria-labelledby="summaryTitle">
+                    <div class="summary-top">
+                        <span class="summary-icon"><i data-lucide="map" aria-hidden="true"></i></span>
+                        <div class="summary-copy"><strong id="summaryTitle">Valdivia hoy</strong><span>Panorama
+                                comunitario</span></div>
+                    </div>
+                    <div class="summary-stats" aria-live="polite">
+                        <div class="stat"><strong id="safeStat">0</strong><span>Seguras</span></div>
+                        <div class="stat"><strong id="careStat">0</strong><span>Precaución</span></div>
+                        <div class="stat"><strong id="riskStat">0</strong><span>Atención</span></div>
+                    </div>
+                </section>
+
+                <section class="panel report-card">
+                    <h2 class="panel-title">¿Algo que otras deberían saber?</h2>
+                    <p>Un reporte claro y sin datos personales puede ayudar a la comunidad a tomar decisiones
+                        informadas.</p>
+                    <button class="primary-button" id="openReportSide" type="button"><i data-lucide="plus"
+                            aria-hidden="true"></i> Crear un reporte</button>
+                </section>
+            </aside>
+
+            <section class="map-area" aria-label="Mapa interactivo de reportes de seguridad en Valdivia">
+                <div id="map" role="application"
+                    aria-label="Mapa. Usa el mouse o el teclado para explorar. También puedes seleccionar una ubicación al crear un reporte.">
+                </div>
+                <div class="map-topline">
+                    <div class="map-heading"><strong>Mapa de seguridad</strong><span>Valdivia y alrededores</span></div>
+                    <div class="map-tools">
+                        <button class="icon-button" id="zoomIn" type="button" title="Acercar mapa"
+                            aria-label="Acercar mapa"><i data-lucide="plus" aria-hidden="true"></i></button>
+                        <button class="icon-button" id="zoomOut" type="button" title="Alejar mapa"
+                            aria-label="Alejar mapa"><i data-lucide="minus" aria-hidden="true"></i></button>
+                    </div>
+                </div>
+                <div class="map-legend" aria-label="Leyenda de zonas">
+                    <span class="legend-item"><span class="legend-dot safe"></span>Segura</span>
+                    <span class="legend-item"><span class="legend-dot care"></span>Precaución</span>
+                    <span class="legend-item"><span class="legend-dot risk"></span>Riesgo</span>
+                </div>
+                <div class="map-note">Reportes de la comunidad. Verifica siempre las condiciones en terreno.</div>
+            </section>
+        </main>
+    </div>
+
+    <div class="modal-backdrop" id="reportModal" role="presentation">
+        <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle"
+            aria-describedby="dialogDescription">
+            <div class="dialog-head">
+                <div>
+                    <h2 id="dialogTitle">Compartir un reporte</h2>
+                    <p id="dialogDescription">Describe lo ocurrido sin incluir nombres ni datos que identifiquen a otras
+                        personas.</p>
+                </div>
+                <button class="icon-button close-button" id="closeReport" type="button" title="Cerrar"
+                    aria-label="Cerrar formulario"><i data-lucide="x" aria-hidden="true"></i></button>
+            </div>
+            <form class="form" id="reportForm">
+                <div class="field">
+                    <label for="incidentType">Tipo de situación</label>
+                    <select id="incidentType" required>
+                        <option value="acoso_callejero">Acoso callejero</option>
+                        <option value="iluminacion_deficiente">Iluminación deficiente</option>
+                        <option value="espacio_seguro">Espacio seguro</option>
+                        <option value="otro">Otra situación</option>
+                    </select>
+                </div>
+                <div class="location-row">
+                    <div class="field"><label for="locationText">Ubicación aproximada</label><input id="locationText"
+                            value="Centro de Valdivia" readonly><span class="field-help">Selecciona un
+                            punto del mapa para ajustar la ubicación.</span></div>
+                    <button class="quiet-button" id="pickLocation" type="button"><i data-lucide="crosshair"
+                            aria-hidden="true"></i> Elegir en mapa</button>
+                </div>
+                <div class="field">
+                    <label for="description">Descripción</label>
+                    <textarea id="description" maxlength="400" placeholder="Comparte solo la información necesaria..."
+                        required></textarea>
+                    <span class="field-help">Máximo 400 caracteres. No publiques información personal.</span>
+                </div>
+                <div class="toggle-row">
+                    <input type="checkbox" id="anonymous" class="toggle-check" checked>
+                    <div><label for="anonymous">Publicar como anónimo</label>
+                        <p>Si está marcado, el reporte se guarda sin vincularlo a tu cuenta: nadie, ni siquiera
+                            la administración, puede saber que lo publicaste tú.</p>
+                    </div>
+                </div>
+                <p class="form-error" id="reportError" role="alert" hidden></p>
+                <div class="form-actions">
+                    <button class="quiet-button" id="cancelReport" type="button">Cancelar</button>
+                    <button class="primary-button" type="submit"><i data-lucide="send" aria-hidden="true"></i> Publicar
+                        reporte</button>
+                </div>
+            </form>
+        </section>
+    </div>
+    <div class="modal-backdrop" id="authModal" role="presentation">
+        <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle"
+            aria-describedby="authDescription">
+            <div class="dialog-head">
+                <div>
+                    <h2 id="authTitle">Ingresa a Sentinela</h2>
+                    <p id="authDescription">Para ver y publicar reportes necesitas una cuenta. Tus reportes pueden
+                        seguir siendo anónimos.</p>
+                </div>
+            </div>
+            <div class="auth-tabs" role="tablist" aria-label="Elegir acción">
+                <button class="auth-tab" id="tabLogin" role="tab" type="button" aria-selected="true"
+                    aria-controls="loginForm">Iniciar sesión</button>
+                <button class="auth-tab" id="tabRegister" role="tab" type="button" aria-selected="false"
+                    aria-controls="registerForm">Crear cuenta</button>
+            </div>
+            <form class="form" id="loginForm" role="tabpanel" aria-labelledby="tabLogin" novalidate>
+                <div class="field">
+                    <label for="loginEmail">Correo electrónico</label>
+                    <input id="loginEmail" type="email" autocomplete="email" maxlength="254" required>
+                </div>
+                <div class="field">
+                    <label for="loginPassword">Contraseña</label>
+                    <input id="loginPassword" type="password" autocomplete="current-password" minlength="8"
+                        maxlength="72" required>
+                </div>
+                <p class="form-error" id="loginError" role="alert" hidden></p>
+                <div class="form-actions">
+                    <button class="primary-button" type="submit"><i data-lucide="log-in" aria-hidden="true"></i>
+                        Ingresar</button>
+                </div>
+            </form>
+            <form class="form" id="registerForm" role="tabpanel" aria-labelledby="tabRegister" hidden novalidate>
+                <div class="field">
+                    <label for="registerName">Nombre</label>
+                    <input id="registerName" autocomplete="given-name" maxlength="120" required>
+                    <span class="field-help">Puede ser un apodo. No se muestra en tus reportes anónimos.</span>
+                </div>
+                <div class="field">
+                    <label for="registerEmail">Correo electrónico</label>
+                    <input id="registerEmail" type="email" autocomplete="email" maxlength="254" required>
+                </div>
+                <div class="field">
+                    <label for="registerPassword">Contraseña</label>
+                    <input id="registerPassword" type="password" autocomplete="new-password" minlength="8"
+                        maxlength="72" required>
+                    <span class="field-help">Mínimo 8 caracteres.</span>
+                </div>
+                <p class="form-error" id="registerError" role="alert" hidden></p>
+                <div class="form-actions">
+                    <button class="primary-button" type="submit"><i data-lucide="user-plus" aria-hidden="true"></i>
+                        Crear cuenta</button>
+                </div>
+            </form>
+        </section>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="/vendor/leaflet/leaflet.js"></script>
+    <script src="/vendor/lucide/lucide.min.js"></script>
+    <script src="/app.js"></script>
+</body>
+
+</html>

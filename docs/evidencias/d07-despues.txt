@@ -1,0 +1,2 @@
+No se puede iniciar Sentinela: JWT_SECRET debe tener al menos 32 caracteres (configúralo en el archivo .env)
+código de salida: 1
